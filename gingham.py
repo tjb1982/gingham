@@ -1,0 +1,424 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+import sys, os, json, requests, operator, yaml, time, copy
+
+
+headers = {'Content-Type': 'application/json'}
+genv = {}
+
+def verify(erwt, body, reports = None, depth = 0, parent_key = None, optional = False, local_env = None, throw = False):
+
+    reports = reports if reports is not None else [[],[]]
+    local_env = local_env if local_env is not None else {}
+    env = local_env.copy()
+
+    env.update(genv)
+
+    def append_report(optional, report):
+        if optional:
+           reports[0].append(report)
+        else:
+           reports[1].append(report)
+
+    if type(erwt) == dict:
+
+        for key in erwt:
+
+            if type(key) == int:
+                if len(body) <= key:
+                    append_report(optional, (
+                        "The item at index %s doesn't exist for key '%s' at depth %s"
+                    ) % (key, parent_key, depth - 1))
+                else:
+                    throw = verify(erwt[key], body[key], reports, depth + 1, key, optional, local_env, throw)[2]
+
+            else:
+
+                parts = key.split("?")
+                body_key = parts[0]
+                opt = optional or len(parts) > 1
+
+                if ~key.find('$$$'):
+                    if '$type' in key:
+                        erwt_type = getattr(__builtins__, evaluate(erwt[key], None, env))
+                        body_type = type(body)
+    
+                        if erwt_type != body_type:
+                            append_report(opt, (
+                                "The type for the value of key '%s' at depth %s was expected to be '%s', but was %s instead"
+                            ) % (key, depth, erwt_type, body_type))
+
+                    elif '$value' in key:
+                        value = evaluate(erwt[key], None, env)
+                        if value != body:
+                            append_report(opt, (
+                                "The value for key '%s' at depth %s was expected to be %s (%s), but was %s (%s) instead"
+                            ) % (parent_key, depth, value, type(value), body, type(body)))
+
+                    elif '$ops' in key:
+                        operators = erwt[key]
+                        for op in operators:
+                            value = evaluate(erwt[key][op], None, env)
+                            if not getattr(operator, op)(body, value):
+                                append_report(opt, (
+                                    "The value for key '%s' at depth %s was expected to be %s %s (%s), but was %s (%s) instead"
+                                ) % (parent_key, depth, op, value, type(value), body, type(body)))
+
+                    elif '$or' in key:
+                        options = evaluate(erwt[key], None, env)
+                        if body not in options:
+                            append_report(opt, (
+                                "The value for key '%s' at depth %s was expected to be one of %s, but was %s (%s) instead"
+                            ) % (parent_key, depth, " or ".join(map(lambda x: "%s (%s)" % (x, type(x)), options)), body, type(body)))
+
+                    elif '$set' in key:
+                        genv[interpolate(erwt[key], env)] = body
+
+                    elif '$throw' in key:
+                        value = evaluate(erwt[key], None, env)
+                        if value == body:
+                            throw = True
+                            append_report(False, (
+                                "The value for key '%s' at depth %s was expected to NOT be %s (%s), but was"
+                            ) % (parent_key, depth, value, type(value)))
+                            return [reports, local_env, throw]
+
+                    elif '$log' in key:
+                        print(erwt[key] % body, file=sys.stderr)
+
+                    elif '$let' in key:
+                        letargs = [[erwt[key], body], {'$$$identity': body}]
+                        local_env[erwt[key]] = evaluate({key: letargs}, None, env)
+                        #local_env[erwt[key]] = body
+    
+                elif not opt and key not in body:
+                    append_report(opt, (
+                        "Key '%s' not found in response at depth %s"
+                    ) % (key, depth))
+
+                else:
+                    throw = verify(erwt[key], body.get(body_key), reports, depth + 1, key, opt, local_env, throw)[2]
+
+    return [reports, local_env, throw]
+
+
+#class TestRun:
+#    okay = True
+#    warn = False
+#    body_report = Report()
+#    header_report = Report()
+#    status_report = Report()
+#    throw = False
+#
+#    def report_status(self, report_type, report):
+#        self.status_report = report
+#        self.okay = self.okay and not len(self.status_report.errors)
+#        self.warn = self.warn or len(self.status_report.errors)
+#
+#    def report_body(self, report_type, report):
+#        self.body_report = Report(
+#
+#
+#class Report:
+#    errors = []
+#    warnings = []
+
+
+def compare_status_dict(endpoint, t, idx, env = None):
+
+    env = env.copy() if env is not None else {}
+    data = swap_dict(t.get('data'), env)
+
+    print("Test #%s. %s" % (idx, interpolate(t['description'], env)), file=sys.stderr)
+
+    def check(attempts_remaining = 0):
+
+        if '$$$delay' in t:
+            time.sleep(float(swap(evaluate(t.get('$$$delay'), None, env))) / 1000)
+
+        s = getattr(requests, t['method'])(
+            endpoint,
+            data = json.dumps(data),
+            headers=headers
+        )
+
+        okay = True
+        warn = False
+        body_reports = [[],[]]
+        header_reports = [[],[]]
+        status_reports = [[],[]]
+        throw = False
+
+        for k in t:
+            optional = '?' in k
+            if 'status' in k:
+                status_reports, e, throw = verify(t[k], s.status_code, optional=optional, parent_key='status', local_env=env)
+                okay = okay and not len(status_reports[1])
+                warn = warn or len(status_reports[0])
+                attempts_remaining = attempts_remaining if not throw else 0
+            elif 'body' in k:
+                try:
+                    body_reports, e, throw = verify(t[k], s.json(), optional=optional, local_env=env)
+                except ValueError, ve:
+                    body_reports[1].append("Expected payload to be JSON\n\tGot %s instead." % s.text)
+                okay = okay and not len(body_reports[1])
+                warn = warn or len(body_reports[0])
+                attempts_remaining = attempts_remaining if not throw else 0
+            elif 'headers' in k:
+                header_reports, e, throw = verify(t[k], s.headers, optional=optional, local_env=env)
+                okay = okay and not len(header_reports[1])
+                warn = warn or len(header_reports[0])
+                attempts_remaining = attempts_remaining if not throw else 0
+
+        if not okay:
+            if attempts_remaining > 0:
+                sys.stderr.write('.')
+                sys.stderr.flush()
+                return check(attempts_remaining - 1)
+            print(
+                "Failed: %s\n%s %s %s" % (
+                    interpolate(t.get('expectation')) if t.get('expectation') else "",
+                    "\tStatus errors:\n\t\t%s\n" % ", \n\t\t".join(status_reports[1]) if status_reports[1] else "",
+                    "\tBody errors:\n\t\t%s\n" % ", \n\t\t".join(body_reports[1]) if body_reports[1] else "",
+                    "\tHeader errors:\n\t\t%s\n" % ", \n\t\t".join(header_reports[1]) if header_reports[1] else ""
+                ),
+                file=sys.stderr
+            )
+            print(
+                "%s %s %s %s" % (
+                    "\n\tdata:\n\t\t%s\n" % data if data else "",
+                    "\n\tbody:\n\t\t%s\n" % s.content if s.content else "",
+                    "\n\theaders:\n\t\t%s\n" % s.headers if s.headers else "",
+                    "\n\treason:\n\t\t%s\n" % s.reason if s.reason and s.reason != "OK" else ""
+                ),
+                file=sys.stderr
+            )
+        else:
+            if warn:
+                print(
+                    "Warning:\n%s %s %s" % (
+                        "\tStatus:\n\t\t%s\n" % ", \n\t\t".join(status_reports[0]) if status_reports[0] else "",
+                        "\tBody:\n\t\t%s\n" % ", \n\t\t".join(body_reports[0]) if body_reports[0] else "",
+                        "\tHeader:\n\t\t%s\n" % ", \n\t\t".join(header_reports[0]) if header_reports[0] else ""
+                ),
+                file=sys.stderr)
+
+            if '$$$then' in t:
+                print("", file=sys.stderr)
+                for endpoints in t.get('$$$then'):
+                    for context in endpoints:
+                        endp = expand_endpoint(context, env)
+                        print("%sthen ==> %s" % (
+                                "".join(map(lambda x: "\t" if x > 0 else "", range(0, len(str(idx).split("."))))),
+                                endp
+                            ),
+                            file=sys.stderr
+                        )
+                        for result in [compare_status_dict(endp, tt, "%s.%s" % (idx, i + 1), env) for i, tt in enumerate(endpoints[context])]:
+                            okay = okay and result
+                return okay
+            else:
+                print("OK\n", file=sys.stderr)
+
+        return okay
+
+    return check(float(evaluate(t.get('$$$retry'), None, env)) if t.get('$$$retry') else 0)
+
+
+def swap_dict(o, env = None):
+
+    env if env is not None else {}
+
+    if type(o) == dict:
+        for k in o:
+            if type(o[k]) == dict:
+                o[k] = swap_dict(o[k], env)
+            else:
+                o[k] = swap(o[k], env)
+    return o
+
+
+def interpolate(string, env = {}):
+    env.update(genv)
+    try:
+        return string.format(**env)
+    except KeyError:
+        pass
+    return string
+
+
+def maybe_to_number(expr):
+    if type(expr) is not str: return expr
+    try:
+        return int(expr)
+    except ValueError:
+        try:
+            return float(expr)
+        except ValueError:
+            return expr
+
+
+def swap(k, env = None):
+    env = env.copy() if env is not None else {}
+    env.update(genv)
+
+    try:
+        return maybe_to_number(env[k])
+    except KeyError:
+        try:
+            return maybe_to_number(("{%s}" % k).format(**env))
+        except IndexError:
+            pass
+        except KeyError:
+            pass
+    except TypeError:
+        pass
+    return k
+
+
+def expand_endpoint(context = "", env = {}):
+    if context[0:1] == "/":
+        return "%s%s" % (api_base, interpolate(context, env))
+    else:
+        return interpolate(context, env)
+
+
+def evaluate(form, results, env = None):
+
+    env = env.copy() if env is not None else {}
+
+#    print(env)
+
+    if type(form) is dict:
+        for function in form:
+            name = function
+            args = form[function]
+
+            if '$$$' in name:
+                if '$let' in name or '$set' in name:
+                    xenv = genv if '$set' in name else env
+                    for i in range(0, len(args[0]), 2):
+                        if type(args[0][i]) is list:
+                            parts = evaluate(args[0][i+1], results, env)
+                            for idx, part in enumerate(parts):
+                                xenv[args[0][i][idx]] = part
+                        else:
+                            xenv[args[0][i]] = evaluate(args[0][i+1], results, env)
+                    ret = None
+                    if len(args) > 1:
+                        for expr in args[1:]:
+                            ret = evaluate(expr, results, env)
+                    return ret
+                        
+                elif '$split' in name:
+                    return apply(str.split, evaluate(args, results, env))
+                elif '$range' in name:
+                    return apply(range, evaluate(args, results, env))
+                elif '$len' in name:
+                    return len(evaluate(args, results, env))
+                elif '$get' in name:
+                    return evaluate(args[0], results, env).__getitem__(evaluate(args[1], results, env))
+                elif '$sum' in name:
+                    return sum(evaluate(args, results, env))
+                elif '$product' in name:
+                    return reduce(operator.mul, evaluate(args, results, env))
+                elif '$if' in name:
+                    return evaluate(args[1]) if evaluate(args[0], results, env) else evaluate(args[2], results, env)
+                elif '$eq' in name:
+                    return reduce(operator.eq, evaluate(args, results, env))
+                elif '$type' in name:
+                    return str(type(evaluate(args, results, env)))
+                elif '$identity' in name:
+                    return args
+                elif '$log' in name:
+                    value = evaluate(args, results, env)
+                    print(value, file=sys.stderr)
+                    return value
+                elif '$run' in name:
+                    return [run(evaluate(arg, results, env), results, env) for arg in evaluate(args, results, env)]
+                elif '$for' in name:
+                    newlist = []
+                    for var in evaluate(args[0][1], results, env):
+                        argsc = copy.deepcopy(args[1])
+                        env[args[0][0]] = var
+                        newlist.append(evaluate(argsc, results, env))
+                    return newlist
+            else:
+                endpoint = expand_endpoint(name)
+                print("Testing %s:" % endpoint, file=sys.stderr)
+                results.append([
+                    compare_status_dict(
+                        endpoint,
+                        t,
+                        "%s.%s" % (len(results) + 1, idx + 1),
+                        env
+                    ) for idx, t in enumerate(args)
+                ])
+    elif type(form) is list:
+        return map(lambda x: evaluate(x, results, env), form)
+    else:
+        return swap(form, env)
+
+def run(test_file, results, env):
+    with open(test_file, 'r') as f:
+        docs = yaml.load_all(f)
+        for doc in docs:
+            for functions in doc:
+                evaluate(functions, results, env)
+    return results
+
+
+
+if __name__ == '__main__':
+
+    api_base = ""
+    test_file = sys.argv[1]
+
+    genv["argv"] = []
+    for i in range(2, len(sys.argv[2:]) + 2):
+        if sys.argv[i] == "-b" and len(sys.argv) > i + 1:
+            api_base = sys.argv[i + 1]
+        elif sys.argv[i] == "-a" and len(sys.argv) > i + 1:
+            key, _, val = sys.argv[i + 1].partition('=')
+            genv[key] = val
+
+    try:
+        for arg in sys.argv[sys.argv.index("--") + 1:]:
+            genv["argv"].append(arg)
+    except ValueError, ve:
+        pass
+
+#    print(genv)
+#    sys.exit(0)
+
+    results = []
+    env = {}
+
+    results = run(test_file, results, env)
+#    with open(test_file, 'r') as f:
+#        docs = yaml.load_all(f)
+#        for doc in docs:
+#            for functions in doc:
+#                evaluate(functions, results, env)
+
+    passed = True
+    passing = 0
+    failing = 0
+
+    for tests in results:
+        for result in tests:
+            passing += result and True
+            failing += not result and True
+            passed = passed and result
+
+    print("%s passing." % passing, file=sys.stderr)
+    print("%s failing." % failing, file=sys.stderr)
+
+    print("\nEnvironment: %s" % genv, file=sys.stderr)
+
+    if passed:
+        print("OK\n")
+
+    sys.exit(not passed)
+
