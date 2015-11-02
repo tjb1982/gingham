@@ -263,6 +263,12 @@ def swap(k, env = None):
     env = env.copy() if env is not None else {}
     env.update(genv)
 
+    if type(k) is str and k.strip().startswith("<"):
+        _, filename = k.split("<")
+        with open(swap(filename.strip(), env), 'r') as f:
+            ret = f.read()
+        return ret
+
     try:
         return maybe_to_number(env[k])
     except KeyError:
