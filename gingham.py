@@ -313,7 +313,11 @@ def evaluate(form, results, env = None):
                 elif '$product' in name:
                     return reduce(operator.mul, evaluate(args, results, env))
                 elif '$if' in name:
-                    return evaluate(args[1], results, env) if evaluate(args[0], results, env) else evaluate(args[2], results, env)
+                    if evaluate(args[0], results, env):
+                        return evaluate(args[1], results, env)
+                    elif len(args) > 2:
+                        return evaluate(args[2], results, env)
+                    #return evaluate(args[1], results, env) if evaluate(args[0], results, env) else evaluate(args[2], results, env)
                 elif '$eq' in name:
                     return reduce(operator.eq, evaluate(args, results, env))
                 elif '$type' in name:
