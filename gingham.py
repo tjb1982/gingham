@@ -103,28 +103,6 @@ def verify(erwt, body, reports = None, depth = 0, parent_key = None, optional = 
     return [reports, local_env, throw]
 
 
-#class TestRun:
-#    okay = True
-#    warn = False
-#    body_report = Report()
-#    header_report = Report()
-#    status_report = Report()
-#    throw = False
-#
-#    def report_status(self, report_type, report):
-#        self.status_report = report
-#        self.okay = self.okay and not len(self.status_report.errors)
-#        self.warn = self.warn or len(self.status_report.errors)
-#
-#    def report_body(self, report_type, report):
-#        self.body_report = Report(
-#
-#
-#class Report:
-#    errors = []
-#    warnings = []
-
-
 def compare_status_dict(endpoint, t, idx, env = None):
 
     env = env.copy() if env is not None else {}
@@ -239,7 +217,8 @@ def swap_dict(o, env = None):
     return o
 
 
-def interpolate(string, env = {}):
+def interpolate(string, env = None):
+    env = env.copy() if env is not None else {}
     env.update(genv)
     try:
         return string.format(**env)
@@ -280,6 +259,10 @@ def swap(k, env = None):
             pass
     except TypeError:
         pass
+
+    if type(k) is str:
+       return interpolate(k, env)
+
     return k
 
 
@@ -330,7 +313,7 @@ def evaluate(form, results, env = None):
                 elif '$product' in name:
                     return reduce(operator.mul, evaluate(args, results, env))
                 elif '$if' in name:
-                    return evaluate(args[1]) if evaluate(args[0], results, env) else evaluate(args[2], results, env)
+                    return evaluate(args[1], results, env) if evaluate(args[0], results, env) else evaluate(args[2], results, env)
                 elif '$eq' in name:
                     return reduce(operator.eq, evaluate(args, results, env))
                 elif '$type' in name:
