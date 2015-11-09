@@ -80,7 +80,7 @@ def verify(erwt, body, reports = None, depth = 0, parent_key = None, optional = 
                         if value == body:
                             throw = True
                             append_report(False, (
-                                "The value for key '%s' at depth %s was expected to NOT be %s (%s), but was"
+                                "The value for key '%s' at depth %s was expected NOT to be %s (%s), but it was"
                             ) % (parent_key, depth, value, type(value)))
                             return [reports, local_env, throw]
 
@@ -106,7 +106,7 @@ def verify(erwt, body, reports = None, depth = 0, parent_key = None, optional = 
 def compare_status_dict(endpoint, t, idx, env = None):
 
     env = env.copy() if env is not None else {}
-    data = swap_dict(t.get('data'), env)
+    data = t.get('data')
 
     print("Test #%s. %s" % (idx, interpolate(t['description'], env)), file=sys.stderr)
 
@@ -204,19 +204,6 @@ def compare_status_dict(endpoint, t, idx, env = None):
     return check(float(evaluate(t.get('$$$retry'), None, env)) if t.get('$$$retry') else 0)
 
 
-def swap_dict(o, env = None):
-
-    env if env is not None else {}
-
-    if type(o) == dict:
-        for k in o:
-            if type(o[k]) == dict:
-                o[k] = swap_dict(o[k], env)
-            else:
-                o[k] = swap(o[k], env)
-    return o
-
-
 def interpolate(string, env = None):
     env = env.copy() if env is not None else {}
     env.update(genv)
@@ -261,7 +248,7 @@ def swap(k, env = None):
         pass
 
     if type(k) is str:
-       return interpolate(k, env)
+       k = interpolate(k, env)
 
     return k
 
@@ -273,13 +260,16 @@ def expand_endpoint(context = "", env = {}):
         return interpolate(context, env)
 
 
-def evaluate(form, results, env = None):
+def evaluate(form, results, env = None, allow_endpoint = True):
 
     env = env.copy() if env is not None else {}
 
-#    print(env)
-
     if type(form) is dict:
+        if not allow_endpoint:
+            for k in form:
+                v = evaluate(form[k], results, env, allow_endpoint)
+                form[evaluate(k, results, env, allow_endpoint)] = v
+            return form
         for function in form:
             name = function
             args = form[function]
@@ -340,14 +330,14 @@ def evaluate(form, results, env = None):
             else:
                 endpoint = expand_endpoint(name)
                 print("Testing %s:" % endpoint, file=sys.stderr)
-                results.append([
-                    compare_status_dict(
-                        endpoint,
-                        t,
-                        "%s.%s" % (len(results) + 1, idx + 1),
-                        env
-                    ) for idx, t in enumerate(args)
-                ])
+                for idx, t in enumerate(args):
+                    t['data'] = evaluate(t.get('data'), results, env, allow_endpoint = False)
+                    results.append([
+                        compare_status_dict(
+                            endpoint, t, "%s.%s" % (len(results) + 1, idx + 1), env
+                        )
+                    ])
+                return None
     elif type(form) is list:
         return map(lambda x: evaluate(x, results, env), form)
     else:
