@@ -1,4 +1,6 @@
-# gingham
+![gingham banner](https://lefistnoir.files.wordpress.com/2011/02/gingham-grey.jpg)
+
+# __gingham__ #
 API test interpreter
 
 ## What is Gingham?
