@@ -108,7 +108,7 @@ def compare_status_dict(endpoint, t, idx, env = None):
     env = env.copy() if env is not None else {}
     data = t.get('data')
 
-    print("Test #%s. %s" % (idx, interpolate(t['description'], env)), file=sys.stderr)
+    print("Test #%s. %s" % (idx, interpolate(t.get('description'), env)), file=sys.stderr)
 
     def check(attempts_remaining = 0):
 
@@ -118,7 +118,8 @@ def compare_status_dict(endpoint, t, idx, env = None):
         s = getattr(requests, t['method'])(
             endpoint,
             data = json.dumps(data),
-            headers=headers
+            headers=headers,
+            timeout=60.0
         )
 
         okay = True
@@ -210,6 +211,8 @@ def interpolate(string, env = None):
     try:
         return string.format(**env)
     except KeyError:
+        pass
+    except AttributeError:
         pass
     return string
 
@@ -344,11 +347,20 @@ def evaluate(form, results, env = None, allow_endpoint = True):
         return swap(form, env)
 
 def run(test_file, results, env):
-    with open(test_file, 'r') as f:
-        docs = yaml.load_all(f)
-        for doc in docs:
-            for functions in doc:
-                evaluate(functions, results, env)
+
+    if not test_file:
+        f = sys.stdin
+    else:
+        f = open(test_file, 'r')
+
+    docs = yaml.load_all(f)
+    for doc in docs:
+        for functions in doc:
+            evaluate(functions, results, env)
+
+    if test_file:
+        f.close()
+
     return results
 
 
@@ -356,15 +368,17 @@ def run(test_file, results, env):
 if __name__ == '__main__':
 
     api_base = ""
-    test_file = sys.argv[1]
+    test_file = None
 
     genv["argv"] = []
-    for i in range(2, len(sys.argv[2:]) + 2):
+    for i in range(1, len(sys.argv[1:]) + 1):
         if sys.argv[i] == "-b" and len(sys.argv) > i + 1:
             api_base = sys.argv[i + 1]
         elif sys.argv[i] == "-a" and len(sys.argv) > i + 1:
             key, _, val = sys.argv[i + 1].partition('=')
             genv[key] = val
+        elif sys.argv[i] == "-t" and len(sys.argv) > i + 1:
+            test_file = sys.argv[i + 1]
 
     try:
         for arg in sys.argv[sys.argv.index("--") + 1:]:
