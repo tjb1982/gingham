@@ -371,14 +371,17 @@ if __name__ == '__main__':
     test_file = None
 
     genv["argv"] = []
-    for i in range(1, len(sys.argv[1:]) + 1):
-        if sys.argv[i] == "-b" and len(sys.argv) > i + 1:
-            api_base = sys.argv[i + 1]
-        elif sys.argv[i] == "-a" and len(sys.argv) > i + 1:
-            key, _, val = sys.argv[i + 1].partition('=')
-            genv[key] = val
-        elif sys.argv[i] == "-t" and len(sys.argv) > i + 1:
-            test_file = sys.argv[i + 1]
+    if len(sys.argv) == 2:
+        test_file = sys.argv[1]
+    else:
+        for i in range(1, len(sys.argv[1:]) + 1):
+            if sys.argv[i] == "-b" and len(sys.argv) > i + 1:
+                api_base = sys.argv[i + 1]
+            elif sys.argv[i] == "-a" and len(sys.argv) > i + 1:
+                key, _, val = sys.argv[i + 1].partition('=')
+                genv[key] = val
+            elif sys.argv[i] == "-t" and len(sys.argv) > i + 1:
+                test_file = sys.argv[i + 1]
 
     try:
         for arg in sys.argv[sys.argv.index("--") + 1:]:
