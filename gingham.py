@@ -110,7 +110,7 @@ def compare_status_dict(endpoint, t, idx, env = None):
 
     print("Test #%s. %s\n%s %s" % (idx, interpolate(t.get('description'), env) or '', t.get('method').upper(), endpoint), file=sys.stderr)
     if t.get('data'):
-        print('data: %s' % json.dumps(data))
+        print('\tpayload: %s' % json.dumps(data))
 
     def check(attempts_remaining = 0):
 
