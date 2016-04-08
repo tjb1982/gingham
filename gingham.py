@@ -108,7 +108,9 @@ def compare_status_dict(endpoint, t, idx, env = None):
     env = env.copy() if env is not None else {}
     data = t.get('data')
 
-    print("Test #%s. %s" % (idx, interpolate(t.get('description'), env)), file=sys.stderr)
+    print("Test #%s. %s\n%s %s" % (idx, interpolate(t.get('description'), env) or '', t.get('method').upper(), endpoint), file=sys.stderr)
+    if t.get('data'):
+        print('data: %s' % json.dumps(data))
 
     def check(attempts_remaining = 0):
 
@@ -188,8 +190,9 @@ def compare_status_dict(endpoint, t, idx, env = None):
                 for endpoints in t.get('$$$then'):
                     for context in endpoints:
                         endp = expand_endpoint(context, env)
-                        print("%sthen ==> %s" % (
+                        print("%sthen ==> %s %s" % (
                                 "".join(map(lambda x: "\t" if x > 0 else "", range(0, len(str(idx).split("."))))),
+                                endpoints[context].get('method'),
                                 endp
                             ),
                             file=sys.stderr
@@ -332,7 +335,7 @@ def evaluate(form, results, env = None, allow_endpoint = True):
                     return newlist
             else:
                 endpoint = expand_endpoint(name)
-                print("Testing %s:" % endpoint, file=sys.stderr)
+                #print("%s %s:" % (args[0].get('method').upper(), endpoint), file=sys.stderr)
                 for idx, t in enumerate(args):
                     t['data'] = evaluate(t.get('data'), results, env, allow_endpoint = False)
                     results.append([
