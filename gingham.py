@@ -190,7 +190,6 @@ def compare_status_dict(endpoint, t, idx, env = None):
                 for endpoints in t.get('$$$then'):
                     for context in endpoints:
                         endp = expand_endpoint(context, env)
-                        print(endpoints[context])
                         print("%sthen ==> %s " % (
                                 "".join(map(lambda x: "\t" if x > 0 else "", range(0, len(str(idx).split("."))))),
                                 endp
