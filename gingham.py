@@ -294,7 +294,10 @@ def evaluate(form, results, env = None, allow_endpoint = True):
                         for expr in args[1:]:
                             ret = evaluate(expr, results, env)
                     return ret
-                        
+                elif '$assoc' in name:
+                    subj = copy.deepcopy(evaluate(args[0], results, env, allow_endpoint))
+                    subj[args[1]] = args[2]
+                    return subj
                 elif '$split' in name:
                     return apply(str.split, evaluate(args, results, env))
                 elif '$range' in name:
