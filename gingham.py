@@ -237,7 +237,7 @@ def swap(k, env = None):
     if type(k) is str and k.strip().startswith("<"):
         _, filename = k.split("<")
         with open(swap(filename.strip(), env), 'r') as f:
-            ret = f.read()
+            ret = f.read().strip()
         return ret
 
     try:
@@ -318,7 +318,7 @@ def evaluate(form, results, env = None, allow_endpoint = True):
                 elif '$type' in name:
                     return str(type(evaluate(args, results, env)))
                 elif '$identity' in name:
-                    return args
+                    return evaluate(args, results, env, allow_endpoint = False)
                 elif '$log' in name:
                     value = evaluate(args, results, env)
                     print(value, file=sys.stderr)
@@ -344,7 +344,7 @@ def evaluate(form, results, env = None, allow_endpoint = True):
                     ])
                 return None
     elif type(form) is list:
-        return map(lambda x: evaluate(x, results, env), form)
+        return map(lambda x: evaluate(x, results, env, allow_endpoint), form)
     else:
         return swap(form, env)
 
