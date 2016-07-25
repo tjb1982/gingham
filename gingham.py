@@ -336,7 +336,7 @@ def evaluate(form, results, env = None, allow_endpoint = True):
                         newlist.append(evaluate(argsc, results, env))
                     return newlist
             else:
-                endpoint = expand_endpoint(name)
+                endpoint = expand_endpoint(name, env)
                 #print("%s %s:" % (args[0].get('method').upper(), endpoint), file=sys.stderr)
                 for idx, t in enumerate(args):
                     t['data'] = evaluate(t.get('data'), results, env, allow_endpoint = False)
