@@ -305,7 +305,11 @@ def evaluate(form, results, env = None, allow_endpoint = True):
                 elif '$len' in name:
                     return len(evaluate(args, results, env))
                 elif '$get' in name:
-                    return evaluate(args[0], results, env).__getitem__(evaluate(args[1], results, env))
+                    ret = evaluate(args[0], results, env)
+                    for key in args[1:]:
+                        ret = ret.__getitem__(evaluate(key, results, env))
+                    return ret
+                    #return evaluate(args[0], results, env).__getitem__(evaluate(args[1], results, env))
                 elif '$sum' in name:
                     return sum(evaluate(args, results, env))
                 elif '$product' in name:
