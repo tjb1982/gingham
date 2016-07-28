@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 import sys, os, json, requests, operator, yaml, time, copy
+from ds_merge import merge
 
 
 headers = {'Content-Type': 'application/json'}
@@ -298,6 +299,22 @@ def evaluate(form, results, env = None, allow_endpoint = True):
                     subj = copy.deepcopy(evaluate(args[0], results, env, allow_endpoint))
                     subj[args[1]] = args[2]
                     return subj
+                elif '$select-keys' in name:
+                    subj = copy.deepcopy(evaluate(args[0], results, env, allow_endpoint))
+                    new_map = {}
+                    for k in subj:
+                        if subj[k] in args[1:]:
+                            new_map[k] = subj[k]
+                    return new_map
+                elif '$merge' in name:
+                    #new_map = copy.deepcopy(evaluate(args[0], results, env, allow_endpoint))
+                    #for k in args[1]:
+                    #    new_map[k] = args[1][k]
+                    #return new_map
+                ##########
+                    old_map = copy.deepcopy(evaluate(args[0], results, env, allow_endpoint=False))
+                    new_map = copy.deepcopy(evaluate(args[1], results, env, allow_endpoint=False))
+                    return merge(old_map, new_map)
                 elif '$split' in name:
                     return apply(str.split, evaluate(args, results, env))
                 elif '$range' in name:
@@ -371,8 +388,6 @@ def run(test_file, results, env):
         f.close()
 
     return results
-
-
 
 if __name__ == '__main__':
 
