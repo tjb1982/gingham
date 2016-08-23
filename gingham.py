@@ -108,7 +108,7 @@ def compare_status_dict(endpoint, t, idx, env = None):
 
     env = env.copy() if env is not None else {}
     data = t.get('data')
-    verif = t.get('verify')
+    verif = t.get('verify', False)
 
     #print("Test #%s. %s\n%s %s" % (idx, interpolate(t.get('description'), env) or '', t.get('method').upper(), endpoint), file=sys.stderr)
     print("%s %s" % (t.get('method').upper(), endpoint), file=sys.stderr)
