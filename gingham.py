@@ -108,11 +108,13 @@ def compare_status_dict(endpoint, t, idx, env = None):
 
     env = env.copy() if env is not None else {}
     data = t.get('data')
+    verif = t.get('verify')
 
     #print("Test #%s. %s\n%s %s" % (idx, interpolate(t.get('description'), env) or '', t.get('method').upper(), endpoint), file=sys.stderr)
     print("%s %s" % (t.get('method').upper(), endpoint), file=sys.stderr)
     if t.get('data'):
         print('\tpayload: %s' % json.dumps(data), file=sys.stderr)
+        print('\tverify: %s' %verif, file=sys.stderr)
 
     def check(attempts_remaining = 0):
 
@@ -122,6 +124,7 @@ def compare_status_dict(endpoint, t, idx, env = None):
         s = getattr(requests, t['method'])(
             endpoint,
             data = json.dumps(data),
+            verify=verif,
             headers=headers,
             timeout=60.0
         )
