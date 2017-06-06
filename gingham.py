@@ -104,17 +104,29 @@ def verify(erwt, body, reports = None, depth = 0, parent_key = None, optional = 
     return [reports, local_env, throw]
 
 
+def redact(data, redacted = []):
+    data_cp = copy.deepcopy(data) if data else None
+    if data_cp:
+        for key in redacted:
+            if data_cp.get(key):
+                data_cp[key] = "REDACTED"
+    return data_cp
+
+
 def compare_status_dict(endpoint, t, idx, env = None):
 
     env = env.copy() if env is not None else {}
     data = t.get('data')
+    redacted = data.pop("$$$redacted", []) if data else []
+    redacted_data = redact(data, redacted)
     verif = t.get('verify', False)
 
     #print("Test #%s. %s\n%s %s" % (idx, interpolate(t.get('description'), env) or '', t.get('method').upper(), endpoint), file=sys.stderr)
     print("%s %s" % (t.get('method').upper(), endpoint), file=sys.stderr)
-    if t.get('data'):
-        print('\tpayload: %s' % json.dumps(data), file=sys.stderr)
-        print('\tverify: %s' %verif, file=sys.stderr)
+    if redacted_data:
+
+        print('\tpayload: %s' % json.dumps(redacted_data), file=sys.stderr)
+        print('\tverify: %s' % verif, file=sys.stderr)
 
     def check(attempts_remaining = 0):
 
@@ -173,7 +185,7 @@ def compare_status_dict(endpoint, t, idx, env = None):
             )
             print(
                 "%s %s %s %s" % (
-                    "\n\tdata:\n\t\t%s\n" % data if data else "",
+                    "\n\tdata:\n\t\t%s\n" % redacted_data if redacted_data else "",
                     "\n\tbody:\n\t\t%s\n" % s.content if s.content else "",
                     "\n\theaders:\n\t\t%s\n" % s.headers if s.headers else "",
                     "\n\treason:\n\t\t%s\n" % s.reason if s.reason and s.reason != "OK" else ""
