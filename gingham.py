@@ -2,7 +2,7 @@
 
 from __future__ import print_function
 import sys, os, json, requests, operator, yaml, time, copy
-from ds_merge import merge
+from merge import merge
 
 
 headers = {'Content-Type': 'application/json'}
@@ -158,7 +158,7 @@ def compare_status_dict(endpoint, t, idx, env = None):
             elif 'body' in k:
                 try:
                     body_reports, e, throw = verify(t[k], s.json(), optional=optional, local_env=env)
-                except ValueError, ve:
+                except ValueError:
                     body_reports[1].append("Expected payload to be JSON\n\tGot %s instead." % s.text)
                 okay = okay and not len(body_reports[1])
                 warn = warn or len(body_reports[0])
@@ -425,7 +425,7 @@ if __name__ == '__main__':
     try:
         for arg in sys.argv[sys.argv.index("--") + 1:]:
             genv["argv"].append(arg)
-    except ValueError, ve:
+    except ValueError:
         pass
 
 #    print(genv)
