@@ -85,6 +85,19 @@ def verify(erwt, body, reports = None, depth = 0, parent_key = None, optional = 
                             ) % (parent_key, depth, value, type(value)))
                             return [reports, local_env, throw]
 
+                    elif '$eval' in key:
+                        def _eval(this, expected):
+                            return eval(erwt[key])
+                        result = _eval(body, erwt)
+                        if result == False:
+                            append_report(opt,
+                                " ".join(["$$$eval failed for key '{key}' at depth {depth}",
+                                          "with arguments: {args}"]).format(
+                                    key=key,
+                                    depth=depth,
+                                    args={"expected": expected, "actual": actual}
+                                ))
+
                     elif '$log' in key:
                         print(erwt[key] % body, file=sys.stderr)
 
