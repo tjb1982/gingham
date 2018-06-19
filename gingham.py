@@ -87,7 +87,7 @@ def verify(erwt, body, reports = None, depth = 0, parent_key = None, optional = 
 
                     elif '$eval' in key:
                         def _eval(this, expected):
-                            return eval(erwt[key])
+                            return exec(erwt[key])
                         result = _eval(body, erwt)
                         if result == False:
                             append_report(opt,
