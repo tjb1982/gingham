@@ -88,9 +88,16 @@ def verify(erwt, body, reports = None, depth = 0, parent_key = None, optional = 
                     elif '$eval' in key:
                         def _eval(this, expected):
                             try:
-                                exec erwt[key]
+                                exec erwt[key] in globals(), locals()
                             except Exception as e:
-                                return False
+                                append_report(opt,
+                                    " ".join(["$$$eval failed for key '{key}' at depth {depth}",
+                                              "with arguments: {args}\n{exception}"]).format(
+                                        key=key,
+                                        depth=depth,
+                                        args={"expected": expected, "actual": actual},
+                                        exception=e
+                                    ))
                         result = _eval(body, erwt)
                         if result == False:
                             append_report(opt,
