@@ -95,7 +95,7 @@ def verify(erwt, body, reports = None, depth = 0, parent_key = None, optional = 
                                               "with arguments: {args}\n{exception}"]).format(
                                         key=key,
                                         depth=depth,
-                                        args={"expected": expected, "actual": actual},
+                                        args={"expected": expected, "this": this},
                                         exception=e
                                     ))
                         result = _eval(body, erwt)
