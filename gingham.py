@@ -151,7 +151,7 @@ def compare_status_dict(endpoint, t, idx, env = None):
         s = getattr(requests, t['method'])(
             endpoint,
             data = json.dumps(data),
-            verify=verif,
+            verify=verif or False,
             headers=headers,
             timeout=60.0
         )
